@@ -1,0 +1,22 @@
+{
+  "name": "Beacon Hills Marketing Studio",
+  "short_name": "Beacon Hills",
+  "description": "Prototype restaurant marketing assistant for Beacon Hills.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f7f4ed",
+  "theme_color": "#23362d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
