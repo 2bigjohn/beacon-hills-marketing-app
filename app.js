@@ -43,19 +43,35 @@ function getPosts() {
 }
 
 function savePosts(posts) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+  } catch (e) {
+    if (e.name === "QuotaExceededError" || e.code === 22) {
+      // Strip images from oldest posts to reclaim space, then retry
+      const trimmed = posts.map((p, i) =>
+        i < posts.length - 3 ? { ...p, image: null } : p
+      );
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+        showToast("Storage nearly full — older post images removed to save space.");
+      } catch {
+        showToast("Storage full. Clear some posts in History to continue.");
+      }
+    }
+  }
 }
 
 function showToast(message) {
   const toast = $("toast");
   toast.textContent = message;
   toast.classList.remove("hidden");
-  window.setTimeout(() => toast.classList.add("hidden"), 2600);
+  window.setTimeout(() => toast.classList.add("hidden"), 2800);
 }
 
 function setActiveView(viewId) {
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === viewId);
+    tab.setAttribute("aria-selected", String(tab.dataset.view === viewId));
   });
   document.querySelectorAll(".view").forEach((view) => {
     view.classList.toggle("active", view.id === viewId);
@@ -72,6 +88,20 @@ function readFileAsDataUrl(file, callback) {
   reader.readAsDataURL(file);
 }
 
+function compressImage(dataUrl, maxWidth, quality, callback) {
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, maxWidth / img.width);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    callback(canvas.toDataURL("image/jpeg", quality));
+  };
+  img.onerror = () => callback(dataUrl);
+  img.src = dataUrl;
+}
+
 function handleMediaFile(file) {
   if (!file) return;
   if (!file.type.startsWith("image/")) {
@@ -79,11 +109,13 @@ function handleMediaFile(file) {
     return;
   }
   readFileAsDataUrl(file, (dataUrl) => {
-    state.selectedMedia = dataUrl;
-    state.selectedMediaName = file.name || "Uploaded image";
-    $("previewImage").src = dataUrl;
-    $("mediaPreview").classList.remove("hidden");
-    showToast("Image added.");
+    compressImage(dataUrl, 1200, 0.78, (compressed) => {
+      state.selectedMedia = compressed;
+      state.selectedMediaName = file.name || "Uploaded image";
+      $("previewImage").src = compressed;
+      $("mediaPreview").classList.remove("hidden");
+      showToast("Image added.");
+    });
   });
 }
 
@@ -92,15 +124,17 @@ function handleFlyerFile(file) {
   state.selectedFlyerName = file.name || "Uploaded flyer";
   if (file.type.startsWith("image/")) {
     readFileAsDataUrl(file, (dataUrl) => {
-      state.selectedFlyer = dataUrl;
-      $("flyerImage").src = dataUrl;
-      $("flyerPreview").classList.remove("hidden");
-      showToast("Flyer image added.");
+      compressImage(dataUrl, 1200, 0.78, (compressed) => {
+        state.selectedFlyer = compressed;
+        $("flyerImage").src = compressed;
+        $("flyerPreview").classList.remove("hidden");
+        showToast("Flyer image added.");
+      });
     });
   } else {
     state.selectedFlyer = null;
     $("flyerPreview").classList.add("hidden");
-    showToast("PDF received. OCR/PDF parsing is a backend feature in the next phase.");
+    showToast("PDF received — OCR/parsing is a backend feature in the next phase.");
   }
 }
 
@@ -111,93 +145,96 @@ function selectedPlatforms() {
 const goalCopy = {
   reservations: {
     cta: "Reserve your table",
-    angle: "make Beacon Hills part of your next lunch, dinner, or date night in Aksarben Village",
-    organic: "Post today during late morning or mid-afternoon, then repost a Story reminder near 4 PM.",
-    ad: "Recommend a light reservation-focused ad if you need more covers this week.",
+    angle: "make Beacon Hills your next dinner or date night in Aksarben Village",
+    organic: "Post late morning or mid-afternoon, then add a Story reminder near 4 PM.",
+    ad: "A light reservation-focused ad works well if you need more covers this week.",
     audience: "Adults within 8–12 miles of Aksarben Village; interests: dining out, steak, seafood, date night, Omaha restaurants.",
   },
   brunch: {
     cta: "Join us for brunch",
-    angle: "bring weekend brunch energy to Beacon Hills",
+    angle: "spend a leisurely brunch morning at Beacon Hills",
     organic: "Post Thursday evening, Friday lunch, and Saturday morning for best recall.",
-    ad: "Use organic first. Add a small weekend ad if brunch reservations are soft.",
+    ad: "Try organic first. Add a small weekend ad if brunch reservations are soft.",
     audience: "Adults within 8–10 miles of Aksarben; interests: brunch, cocktails, local restaurants.",
   },
   happy_hour: {
     cta: "Stop in for happy hour",
-    angle: "invite nearby guests to unwind at Beacon Hills",
+    angle: "unwind with us during happy hour at Beacon Hills",
     organic: "Post same-day around lunch, then add a Story reminder 1–2 hours before happy hour.",
-    ad: "Usually organic is enough unless you are promoting a new menu or slow day.",
+    ad: "Organic is usually enough unless you are promoting a new menu or a slow weekday.",
     audience: "Nearby Aksarben, UNO, and Omaha professionals within 3–6 miles.",
   },
   dinner: {
     cta: "Book dinner",
-    angle: "spotlight chef-driven steaks, chops, seafood, and hospitality",
-    organic: "Post between 10 AM–2 PM or 3–5 PM for dinner intent.",
-    ad: "Recommend a short conversion-oriented ad if the feature is premium, seasonal, or weekend-driven.",
+    angle: "enjoy chef-driven steaks, chops, and seafood at Beacon Hills",
+    organic: "Post between 10 AM–2 PM or 3–5 PM to catch dinner-intent scrolling.",
+    ad: "A short conversion-oriented ad works well for premium, seasonal, or weekend features.",
     audience: "Adults within 8–12 miles interested in upscale dining, steakhouse, seafood, and Omaha date night.",
   },
   event: {
     cta: "Save your spot",
-    angle: "turn attention into attendance with clear event details",
+    angle: "join us for a one-of-a-kind evening at Beacon Hills",
     organic: "Post announcement, one-week reminder, 48-hour reminder, and day-of Story.",
-    ad: "Recommend paid support if the event is ticketed, limited-seat, or needs attendance beyond regular followers.",
-    audience: "Adults within 10–15 miles of Aksarben; layer food, wine, live music, private dining, or event interests based on flyer.",
+    ad: "Paid support is smart for ticketed or limited-seat events that need reach beyond your followers.",
+    audience: "Adults within 10–15 miles of Aksarben; layer food, wine, live music, or private dining interests based on the flyer.",
   },
   private_events: {
     cta: "Plan your private event",
-    angle: "showcase Beacon Hills and The Elmwood Room for celebrations and business gatherings",
-    organic: "Post early week when planners are researching venues; repeat monthly.",
-    ad: "Recommend a lead-focused campaign for holiday, graduation, corporate, and wedding-season pushes.",
-    audience: "Adults 28+ within Omaha; interests: event planning, corporate events, weddings, celebrations, catering.",
+    angle: "host your next celebration or gathering in The Elmwood Room at Beacon Hills",
+    organic: "Post early in the week when planners are researching venues; repeat monthly.",
+    ad: "A lead-focused campaign works well for holiday, graduation, corporate, and wedding-season pushes.",
+    audience: "Adults 28+ in Omaha; interests: event planning, corporate events, weddings, celebrations, catering.",
   },
   catering: {
     cta: "Book catering",
-    angle: "position Beacon Hills as a polished catering choice for meetings and celebrations",
-    organic: "Post Tuesday or Wednesday morning when office/event planning is active.",
-    ad: "Recommend a lead or traffic campaign during holiday, graduation, and corporate planning windows.",
+    angle: "bring Beacon Hills hospitality to your next meeting or celebration",
+    organic: "Post Tuesday or Wednesday morning when office and event planning is active.",
+    ad: "A lead or traffic campaign performs well during holiday, graduation, and corporate planning windows.",
     audience: "Omaha office managers, HR, executive assistants, event planners, and adults interested in catering.",
   },
   online_orders: {
     cta: "Order online",
-    angle: "make Beacon Hills easy to enjoy at home or the office",
-    organic: "Post before lunch or late afternoon for meal-decision timing.",
-    ad: "Use organic first; test small traffic ads for limited-time takeout offers.",
+    angle: "enjoy Beacon Hills at home or the office",
+    organic: "Post before lunch or late afternoon to hit meal-decision timing.",
+    ad: "Test small traffic ads for limited-time takeout offers; organic first otherwise.",
     audience: "Adults within 5–8 miles; interests: takeout, lunch, dinner, local restaurants.",
   },
   awareness: {
     cta: "Visit Beacon Hills",
-    angle: "keep Beacon Hills top-of-mind as a warm, polished Aksarben dining destination",
-    organic: "Post when the image is strongest; add Story version the same day.",
+    angle: "discover why Beacon Hills is Aksarben Village's favorite bistro",
+    organic: "Post when the image is strongest; add a Story version the same day.",
     ad: "No paid spend needed unless launching a larger brand or seasonal campaign.",
     audience: "Omaha diners, Aksarben residents, nearby professionals, and repeat guests.",
   },
 };
 
-function toneIntro(tone) {
-  const map = {
-    "Warm & Hospitable": "There’s always a seat waiting for you at Beacon Hills.",
-    "Polished Bistro": "A refined Aksarben dining moment starts here.",
-    "Casual Local Favorite": "Good food, good company, and a familiar Aksarben welcome.",
-    "Event Promo": "Mark your calendar and make plans with us at Beacon Hills.",
-    "Urgent / Limited-Time": "This is your sign to make plans before the opportunity passes.",
-    "Elegant Private Dining": "For gatherings that deserve a polished setting and warm hospitality.",
-    "Catering / Corporate": "Bring Beacon Hills hospitality to your next meeting or celebration.",
+function toneBody(tone, goal, goalData) {
+  const bodies = {
+    "Warm & Hospitable": `There's always a seat waiting for you. Come ${goalData.angle} — we would love to welcome you.`,
+    "Polished Bistro": `Chef-driven American bistro cuisine meets genuine hospitality at Beacon Hills in Aksarben Village. Join us to ${goalData.angle}.`,
+    "Casual Local Favorite": `Your neighborhood bistro is ready for you. Swing by Beacon Hills to ${goalData.angle}. Good food, good company — always.`,
+    "Event Promo": `Mark your calendar. Beacon Hills in Aksarben Village invites you to ${goalData.angle}. This is one you will not want to miss.`,
+    "Urgent / Limited-Time": `This is your reminder: ${goalData.angle} at Beacon Hills before the opportunity passes. Don't wait.`,
+    "Elegant Private Dining": `At Beacon Hills in Aksarben Village, every gathering deserves a polished setting and warm hospitality. Let us help you ${goalData.angle}.`,
+    "Catering / Corporate": `Bring Beacon Hills hospitality to your next event. We are ready to ${goalData.angle} — professionally and beautifully executed.`,
   };
-  return map[tone] || map["Warm & Hospitable"];
+  return bodies[tone] || bodies["Warm & Hospitable"];
 }
 
 function buildCaption({ tone, goal, details, title, eventName, eventDate }) {
   const settings = getSettings();
   const goalData = goalCopy[goal] || goalCopy.awareness;
+  const body = toneBody(tone, goal, goalData);
+  const header = title ? `${title.trim()}\n\n` : "";
   const detailLine = details ? `\n\n${details.trim()}` : "";
-  const titleLine = title ? `${title.trim()}\n\n` : "";
   let eventLine = "";
   if (eventName || eventDate) {
-    const readableDate = eventDate ? new Date(eventDate).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
-    eventLine = `\n\nEvent: ${eventName || "Beacon Hills event"}${readableDate ? ` · ${readableDate}` : ""}`;
+    const readableDate = eventDate
+      ? new Date(eventDate).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
+      : "";
+    eventLine = `\n\n📅 ${eventName || "Beacon Hills event"}${readableDate ? ` · ${readableDate}` : ""}`;
   }
-  return `${titleLine}${toneIntro(tone)} ${goalData.angle}. Whether you are joining us for chef-driven American bistro favorites, steaks, chops, seafood, brunch, happy hour, or a special night out, we would love to welcome you in Aksarben Village.${eventLine}${detailLine}\n\n${goalData.cta}: ${settings.reservationLink}`;
+  return `${header}${body}${eventLine}${detailLine}\n\n${goalData.cta}: ${settings.reservationLink}`;
 }
 
 function buildHashtags(goal) {
@@ -216,15 +253,38 @@ function buildHashtags(goal) {
   return `${settings.preferredHashtags} ${extras[goal] || ""}`.trim();
 }
 
+function updateCaptionCount() {
+  const el = $("captionCount");
+  if (!el) return;
+  const len = ($("captionOutput")?.value || "").length;
+  el.textContent = `${len.toLocaleString()} / 2,200 chars`;
+  el.classList.toggle("over-limit", len > 2200);
+}
+
+async function copyToClipboard(targetId, label) {
+  const value = $(targetId)?.value || "";
+  if (!value) { showToast("Nothing to copy."); return; }
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast(`${label} copied to clipboard.`);
+  } catch {
+    showToast("Could not copy — select text and copy manually.");
+  }
+}
+
 function generatePostPlan() {
-  const title = $("postTitle").value;
+  const title = $("postTitle").value.trim();
   const tone = $("tone").value;
   const goal = $("goal").value;
-  const details = $("postDetails").value;
+  const details = $("postDetails").value.trim();
   const platforms = selectedPlatforms();
 
   if (!platforms.length) {
     showToast("Choose at least one platform.");
+    return;
+  }
+  if (!title && !details && !state.selectedMedia) {
+    showToast("Add a title, some details, or a photo before generating.");
     return;
   }
 
@@ -258,19 +318,26 @@ function generatePostPlan() {
   $("approvalCheck").checked = false;
   $("generatedCard").classList.remove("hidden");
   $("generatedCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  updateCaptionCount();
 }
 
 function createMetrics(status, goal) {
   if (status !== "Published" && status !== "Scheduled") {
     return { impressions: 0, reach: 0, engagement: 0, clicks: 0, spend: 0 };
   }
-  const base = goal === "event" ? 1300 : goal === "reservations" ? 950 : goal === "happy_hour" ? 780 : 650;
+  const base =
+    goal === "event" ? 1300 :
+    goal === "reservations" ? 950 :
+    goal === "happy_hour" ? 780 : 650;
   const multiplier = status === "Scheduled" ? 0 : 1;
   const impressions = Math.round((base + Math.random() * 900) * multiplier);
   const reach = Math.round(impressions * (0.62 + Math.random() * 0.18));
   const engagement = Math.round(impressions * (0.035 + Math.random() * 0.055));
   const clicks = Math.round(impressions * (0.008 + Math.random() * 0.025));
-  const spend = goal === "event" || goal === "private_events" || goal === "catering" ? Math.round(25 + Math.random() * 75) : 0;
+  const spend =
+    goal === "event" || goal === "private_events" || goal === "catering"
+      ? Math.round(25 + Math.random() * 75)
+      : 0;
   return { impressions, reach, engagement, clicks, spend };
 }
 
@@ -279,9 +346,8 @@ function saveGenerated(status) {
     showToast("Generate a post first.");
     return;
   }
-
   if ((status === "Scheduled" || status === "Published") && !$("approvalCheck").checked) {
-    showToast("Approval is required first.");
+    showToast("Check the approval box first.");
     return;
   }
 
@@ -297,72 +363,69 @@ function saveGenerated(status) {
   const posts = getPosts();
   posts.unshift(post);
   savePosts(posts);
-  showToast(`${status} saved to history.`);
+  showToast(`${status} — saved to History.`);
   renderHistory();
   renderAnalytics();
 }
 
 function eventLeadTimeDays(dateString) {
   if (!dateString) return null;
-  const now = new Date();
-  const date = new Date(dateString);
-  const diff = date.getTime() - now.getTime();
+  const diff = new Date(dateString).getTime() - Date.now();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
 function paidRecommendationForEvent(days, urgency, eventGoal) {
   if (eventGoal === "awareness") {
-    return "Use organic posting first. Paid support is optional unless attendance or reservations are a measurable goal.";
+    return "Use organic posting first. Paid support is optional unless attendance is a measurable goal.";
   }
   if (urgency === "limited") {
-    return "Recommend organic posts plus a short paid campaign because limited seats need urgency and repeated reach.";
+    return "Recommend organic posts plus a short paid campaign — limited seats need urgency and repeated reach.";
   }
   if (days === null) {
-    return "Recommend deciding after event date is confirmed. Paid support is useful for ticketed or reservation-based events.";
+    return "Confirm the event date first. Paid support is most effective for ticketed or reservation-based events.";
   }
   if (days <= 3) {
-    return "Recommend same-day/short-burst paid support only if there is budget and the event still needs seats filled.";
+    return "Short-burst paid support only if budget allows and the event still needs seats filled.";
   }
   if (days <= 10) {
-    return "Recommend organic reminders plus a modest 5–7 day paid campaign.";
+    return "Organic reminders plus a modest 5–7 day paid campaign.";
   }
-  return "Start organic now. Add paid support 10–14 days before the event if reservations or RSVPs are behind goal.";
+  return "Start organic now. Add paid support 10–14 days before the event if reservations are behind goal.";
 }
 
 function eventScheduleRecommendation(days) {
   if (days === null) {
-    return "Announcement post now, reminder once event date is confirmed, final reminder the day before.";
+    return "Announcement post now, reminder once date is confirmed, final reminder the day before.";
   }
   if (days <= 2) {
     return "Post immediately, add Story today, and publish a final reminder the morning of the event.";
   }
   if (days <= 10) {
-    return "Post announcement today, reminder 3–4 days before, 48-hour reminder, and day-of Story.";
+    return "Announcement today, reminder 3–4 days before, 48-hour reminder, and day-of Story.";
   }
-  return "Post announcement now, weekly reminder, one-week reminder, 48-hour reminder, and day-of Story.";
+  return "Announcement now, weekly reminder, one-week reminder, 48-hour reminder, and day-of Story.";
 }
 
 function generateEventPlan() {
-  const eventName = $("eventName").value.trim() || "Beacon Hills event";
+  const eventName = $("eventName").value.trim();
   const eventDate = $("eventDate").value;
   const details = $("flyerText").value.trim();
   const eventGoal = $("eventGoal").value;
   const urgency = $("eventUrgency").value;
+
+  if (!eventName) {
+    showToast("Enter an event name before building the campaign.");
+    $("eventName").focus();
+    return;
+  }
+
   const days = eventLeadTimeDays(eventDate);
   const tone = urgency === "limited" ? "Urgent / Limited-Time" : "Event Promo";
-  const caption = buildCaption({
-    tone,
-    goal: eventGoal,
-    details,
-    title: eventName,
-    eventName,
-    eventDate,
-  });
-
+  const caption = buildCaption({ tone, goal: eventGoal, details, title: eventName, eventName, eventDate });
   const cadence = eventScheduleRecommendation(days);
   const paid = paidRecommendationForEvent(days, urgency, eventGoal);
   const targeting =
-    "Target adults within 10–15 miles of Aksarben Village. Start broad with Omaha diners, then refine around wine, brunch, live music, special events, private dining, catering, or date-night interests based on the flyer.";
+    "Target adults within 10–15 miles of Aksarben Village. Start broad with Omaha diners, then refine around wine, brunch, live music, private dining, or event interests based on the flyer.";
 
   state.eventPlan = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
@@ -397,11 +460,10 @@ function saveEvent(status) {
     showToast("Generate an event campaign first.");
     return;
   }
-  if (status === "Scheduled" && !$("eventApproval").checked) {
-    showToast("Approval is required first.");
+  if ((status === "Scheduled" || status === "Published") && !$("eventApproval").checked) {
+    showToast("Check the approval box first.");
     return;
   }
-
   const post = {
     ...state.eventPlan,
     caption: $("eventCaption").value,
@@ -412,58 +474,31 @@ function saveEvent(status) {
   const posts = getPosts();
   posts.unshift(post);
   savePosts(posts);
-  showToast(`${status} event campaign saved.`);
+  showToast(`${status} event campaign saved to History.`);
   renderHistory();
   renderAnalytics();
 }
 
-function statusBadge(status) {
-  return `<span class="badge">${status}</span>`;
+function deletePost(id) {
+  if (!confirm("Remove this post from history?")) return;
+  const posts = getPosts().filter((p) => p.id !== id);
+  savePosts(posts);
+  renderHistory();
+  renderAnalytics();
+  showToast("Post removed.");
 }
 
-function renderHistory() {
-  const search = ($("historySearch")?.value || "").toLowerCase();
-  const status = $("historyStatus")?.value || "";
-  const container = $("historyList");
-  if (!container) return;
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-  const posts = getPosts().filter((post) => {
-    const haystack = `${post.title} ${post.caption} ${post.goal} ${post.tone} ${post.status}`.toLowerCase();
-    const matchesSearch = !search || haystack.includes(search);
-    const matchesStatus = !status || post.status === status;
-    return matchesSearch && matchesStatus;
-  });
-
-  if (!posts.length) {
-    container.innerHTML = `<p class="meta-line">No posts yet. Generate and save one from Create or Event Flyer.</p>`;
-    return;
-  }
-
-  container.innerHTML = posts
-    .map((post) => {
-      const img = post.image
-        ? `<img class="history-thumb" src="${post.image}" alt="">`
-        : `<div class="history-thumb">${post.kind === "event" ? "🎟️" : "🍽️"}</div>`;
-      const date = new Date(post.savedAt || post.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-      const metrics = post.metrics || {};
-      return `
-        <article class="history-item">
-          ${img}
-          <div>
-            <h3>${escapeHtml(post.title || "Beacon Hills post")}</h3>
-            <p class="meta-line">${date} · ${escapeHtml(post.tone || "")} · ${escapeHtml((post.platforms || []).join(", "))}</p>
-            <p>${escapeHtml((post.caption || "").slice(0, 170))}${(post.caption || "").length > 170 ? "…" : ""}</p>
-            <div class="badges">
-              ${statusBadge(post.status || "Draft")}
-              <span class="badge">${escapeHtml(labelForGoal(post.goal))}</span>
-              <span class="badge">${metrics.impressions || 0} impressions</span>
-              <span class="badge">${metrics.engagement || 0} engagements</span>
-            </div>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+function statusBadge(status) {
+  return `<span class="badge">${escapeHtml(status)}</span>`;
 }
 
 function labelForGoal(goal) {
@@ -481,27 +516,76 @@ function labelForGoal(goal) {
   return labels[goal] || "Marketing";
 }
 
+function renderHistory() {
+  const search = ($("historySearch")?.value || "").toLowerCase();
+  const status = $("historyStatus")?.value || "";
+  const container = $("historyList");
+  if (!container) return;
+
+  const posts = getPosts().filter((post) => {
+    const haystack = `${post.title} ${post.caption} ${post.goal} ${post.tone} ${post.status}`.toLowerCase();
+    return (!search || haystack.includes(search)) && (!status || post.status === status);
+  });
+
+  if (!posts.length) {
+    container.innerHTML = `<p class="meta-line">No posts yet. Generate and save one from Create or Event Flyer.</p>`;
+    return;
+  }
+
+  container.innerHTML = posts
+    .map((post) => {
+      const thumb = post.image
+        ? `<img class="history-thumb" src="${escapeHtml(post.image)}" alt="">`
+        : `<div class="history-thumb placeholder">${post.kind === "event" ? "🎟️" : "🍽️"}</div>`;
+      const date = new Date(post.savedAt || post.createdAt).toLocaleString([], {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+      const m = post.metrics || {};
+      const preview = (post.caption || "").slice(0, 160);
+      const truncated = (post.caption || "").length > 160;
+      return `
+        <article class="history-item" data-id="${escapeHtml(post.id)}">
+          ${thumb}
+          <div class="history-content">
+            <div class="history-header">
+              <h3>${escapeHtml(post.title || "Beacon Hills post")}</h3>
+              <button class="delete-btn" data-id="${escapeHtml(post.id)}" title="Remove post" type="button">✕</button>
+            </div>
+            <p class="meta-line">${date} · ${escapeHtml(post.tone || "")} · ${escapeHtml((post.platforms || []).join(", "))}</p>
+            <p class="caption-preview">${escapeHtml(preview)}${truncated ? "…" : ""}</p>
+            <div class="badges">
+              ${statusBadge(post.status || "Draft")}
+              <span class="badge">${escapeHtml(labelForGoal(post.goal))}</span>
+              ${m.impressions ? `<span class="badge">${m.impressions.toLocaleString()} impressions</span>` : ""}
+              ${m.engagement ? `<span class="badge">${m.engagement.toLocaleString()} engagements</span>` : ""}
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderAnalytics() {
   const posts = getPosts();
-  const metrics = posts.reduce(
+  const totals = posts.reduce(
     (acc, post) => {
       const m = post.metrics || {};
       acc.posts += 1;
       acc.impressions += m.impressions || 0;
-      acc.reach += m.reach || 0;
       acc.engagement += m.engagement || 0;
-      acc.clicks += m.clicks || 0;
       acc.spend += m.spend || 0;
       return acc;
     },
-    { posts: 0, impressions: 0, reach: 0, engagement: 0, clicks: 0, spend: 0 }
+    { posts: 0, impressions: 0, engagement: 0, spend: 0 }
   );
 
   $("analyticsSummary").innerHTML = `
-    <div class="stat"><span>Posts</span><strong>${metrics.posts}</strong></div>
-    <div class="stat"><span>Impressions</span><strong>${metrics.impressions.toLocaleString()}</strong></div>
-    <div class="stat"><span>Engagement</span><strong>${metrics.engagement.toLocaleString()}</strong></div>
-    <div class="stat"><span>Mock spend</span><strong>$${metrics.spend.toLocaleString()}</strong></div>
+    <div class="stat"><span>Posts</span><strong>${totals.posts}</strong></div>
+    <div class="stat"><span>Impressions</span><strong>${totals.impressions.toLocaleString()}</strong></div>
+    <div class="stat"><span>Engagement</span><strong>${totals.engagement.toLocaleString()}</strong></div>
+    <div class="stat"><span>Mock spend</span><strong>$${totals.spend.toLocaleString()}</strong></div>
   `;
 
   const top = [...posts]
@@ -509,32 +593,21 @@ function renderAnalytics() {
     .slice(0, 5);
 
   $("topPosts").innerHTML = top.length
-    ? top
-        .map((post) => `
-          <article class="history-item">
-            ${
-              post.image
-                ? `<img class="history-thumb" src="${post.image}" alt="">`
-                : `<div class="history-thumb">${post.kind === "event" ? "🎟️" : "🍽️"}</div>`
-            }
-            <div>
-              <h3>${escapeHtml(post.title || "Beacon Hills post")}</h3>
-              <p class="meta-line">${escapeHtml(labelForGoal(post.goal))} · ${post.metrics?.engagement || 0} engagements · ${post.metrics?.clicks || 0} clicks</p>
-              <div class="badges">${statusBadge(post.status || "Draft")}<span class="badge">${post.metrics?.impressions || 0} impressions</span></div>
-            </div>
-          </article>
-        `)
-        .join("")
+    ? top.map((post) => `
+        <article class="history-item compact">
+          ${
+            post.image
+              ? `<img class="history-thumb" src="${escapeHtml(post.image)}" alt="">`
+              : `<div class="history-thumb placeholder">${post.kind === "event" ? "🎟️" : "🍽️"}</div>`
+          }
+          <div>
+            <h3>${escapeHtml(post.title || "Beacon Hills post")}</h3>
+            <p class="meta-line">${escapeHtml(labelForGoal(post.goal))} · ${(post.metrics?.engagement || 0).toLocaleString()} engagements · ${(post.metrics?.clicks || 0).toLocaleString()} clicks</p>
+            <div class="badges">${statusBadge(post.status || "Draft")}<span class="badge">${(post.metrics?.impressions || 0).toLocaleString()} impressions</span></div>
+          </div>
+        </article>
+      `).join("")
     : `<p class="meta-line">No analytics yet. Publish or schedule a mock post first.</p>`;
-}
-
-function escapeHtml(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function resetBuilder() {
@@ -548,6 +621,7 @@ function resetBuilder() {
   state.selectedMedia = null;
   state.selectedMediaName = "";
   state.generated = null;
+  updateCaptionCount();
 }
 
 function saveSettingsFromForm() {
@@ -594,6 +668,8 @@ function init() {
     state.selectedMedia = null;
     state.selectedMediaName = "";
     $("mediaPreview").classList.add("hidden");
+    $("cameraInput").value = "";
+    $("galleryInput").value = "";
   });
 
   $("generatePost").addEventListener("click", generatePostPlan);
@@ -602,13 +678,24 @@ function init() {
   $("scheduleMock").addEventListener("click", () => saveGenerated("Scheduled"));
   $("publishMock").addEventListener("click", () => saveGenerated("Published"));
 
+  $("captionOutput").addEventListener("input", updateCaptionCount);
+  $("copyCaptionBtn").addEventListener("click", () => copyToClipboard("captionOutput", "Caption"));
+  $("copyHashtagsBtn").addEventListener("click", () => copyToClipboard("hashtagsOutput", "Hashtags"));
+
   $("generateEvent").addEventListener("click", generateEventPlan);
   $("saveEventDraft").addEventListener("click", () => saveEvent("Draft"));
   $("scheduleEventMock").addEventListener("click", () => saveEvent("Scheduled"));
+  $("publishEventMock").addEventListener("click", () => saveEvent("Published"));
 
   $("historySearch").addEventListener("input", renderHistory);
   $("historyStatus").addEventListener("change", renderHistory);
   $("exportHistory").addEventListener("click", exportHistory);
+
+  // Event delegation for delete buttons in history list
+  $("historyList").addEventListener("click", (e) => {
+    const btn = e.target.closest(".delete-btn");
+    if (btn) deletePost(btn.dataset.id);
+  });
 
   $("saveSettings").addEventListener("click", saveSettingsFromForm);
   $("clearAllData").addEventListener("click", () => {
@@ -644,15 +731,14 @@ function init() {
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js").catch(() => {
-        // App still works without offline cache.
-      });
+      navigator.serviceWorker.register("./service-worker.js").catch(() => {});
     });
   }
 
   renderSettings();
   renderHistory();
   renderAnalytics();
+  updateCaptionCount();
 }
 
 document.addEventListener("DOMContentLoaded", init);

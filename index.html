@@ -22,16 +22,17 @@
       <button id="installBtn" class="ghost hidden" type="button">Install</button>
     </header>
 
-    <nav class="tabs" aria-label="Primary navigation">
-      <button class="tab active" data-view="builder">Create</button>
-      <button class="tab" data-view="events">Event Flyer</button>
-      <button class="tab" data-view="history">History</button>
-      <button class="tab" data-view="analytics">Analytics</button>
-      <button class="tab" data-view="settings">Settings</button>
+    <nav class="tabs" role="tablist" aria-label="Primary navigation">
+      <button class="tab active" role="tab" aria-selected="true" data-view="builder">Create</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="events">Event Flyer</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="history">History</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="analytics">Analytics</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="settings">Settings</button>
     </nav>
 
     <main>
-      <section id="builder" class="view active">
+      <!-- CREATE TAB -->
+      <section id="builder" class="view active" role="tabpanel">
         <article class="card">
           <div class="section-title">
             <h2>Create a Meta-ready post</h2>
@@ -67,7 +68,7 @@
             <label class="field">
               <span>Tone</span>
               <select id="tone">
-                <option>Warm & Hospitable</option>
+                <option>Warm &amp; Hospitable</option>
                 <option>Polished Bistro</option>
                 <option>Casual Local Favorite</option>
                 <option>Event Promo</option>
@@ -101,7 +102,7 @@
 
           <label class="field">
             <span>Optional details</span>
-            <textarea id="postDetails" rows="4" placeholder="Dish name, offer, date, link, audience, or special details..."></textarea>
+            <textarea id="postDetails" rows="4" placeholder="Dish name, offer, date, link, audience, or special details…"></textarea>
           </label>
 
           <div class="action-row">
@@ -116,15 +117,26 @@
             <p>Review, edit, and approve before anything is scheduled or posted.</p>
           </div>
 
-          <label class="field">
-            <span>Caption</span>
-            <textarea id="captionOutput" rows="7"></textarea>
-          </label>
+          <div class="field-with-copy">
+            <label class="field">
+              <span>Caption</span>
+              <textarea id="captionOutput" rows="7"></textarea>
+            </label>
+            <div class="field-footer">
+              <small id="captionCount" class="char-count">0 / 2,200 chars</small>
+              <button id="copyCaptionBtn" type="button" class="ghost copy-btn">Copy caption</button>
+            </div>
+          </div>
 
-          <label class="field">
-            <span>Hashtags</span>
-            <input id="hashtagsOutput" type="text" />
-          </label>
+          <div class="field-with-copy">
+            <label class="field">
+              <span>Hashtags</span>
+              <input id="hashtagsOutput" type="text" />
+            </label>
+            <div class="field-footer justify-end">
+              <button id="copyHashtagsBtn" type="button" class="ghost copy-btn">Copy hashtags</button>
+            </div>
+          </div>
 
           <div class="recommendation-grid">
             <div class="recommendation">
@@ -143,18 +155,19 @@
 
           <label class="approval">
             <input id="approvalCheck" type="checkbox" />
-            I approve this post/campaign plan.
+            I approve this post / campaign plan.
           </label>
 
           <div class="action-row">
             <button id="saveDraft" type="button" class="secondary">Save draft</button>
-            <button id="scheduleMock" type="button" class="primary">Approve & schedule mock</button>
-            <button id="publishMock" type="button" class="primary">Approve & publish mock</button>
+            <button id="scheduleMock" type="button" class="primary">Approve &amp; schedule mock</button>
+            <button id="publishMock" type="button" class="primary">Approve &amp; publish mock</button>
           </div>
         </article>
       </section>
 
-      <section id="events" class="view">
+      <!-- EVENT FLYER TAB -->
+      <section id="events" class="view" role="tabpanel">
         <article class="card">
           <div class="section-title">
             <h2>Event flyer assistant</h2>
@@ -165,7 +178,7 @@
             <input id="flyerInput" type="file" accept="image/*,.pdf" />
             <span class="upload-icon">🎟️</span>
             <strong>Upload event flyer</strong>
-            <small>Image preview works now. PDF support is mocked in this prototype.</small>
+            <small>Image preview works now. PDF parsing is a backend feature for the next phase.</small>
           </label>
 
           <div id="flyerPreview" class="media-preview hidden">
@@ -174,18 +187,18 @@
 
           <div class="two-col">
             <label class="field">
-              <span>Event name</span>
+              <span>Event name <span class="required">*</span></span>
               <input id="eventName" type="text" placeholder="Example: Wine Dinner" />
             </label>
             <label class="field">
-              <span>Event date/time</span>
+              <span>Event date / time</span>
               <input id="eventDate" type="datetime-local" />
             </label>
           </div>
 
           <label class="field">
             <span>Flyer text or notes</span>
-            <textarea id="flyerText" rows="5" placeholder="Paste key flyer text here for the prototype: offer, price, musicians, reservation link, etc."></textarea>
+            <textarea id="flyerText" rows="5" placeholder="Paste key flyer text here: offer, price, musicians, reservation link, etc."></textarea>
           </label>
 
           <div class="two-col">
@@ -244,12 +257,14 @@
 
           <div class="action-row">
             <button id="saveEventDraft" type="button" class="secondary">Save event draft</button>
-            <button id="scheduleEventMock" type="button" class="primary">Approve & schedule mock</button>
+            <button id="scheduleEventMock" type="button" class="primary">Approve &amp; schedule mock</button>
+            <button id="publishEventMock" type="button" class="primary">Approve &amp; publish mock</button>
           </div>
         </article>
       </section>
 
-      <section id="history" class="view">
+      <!-- HISTORY TAB -->
+      <section id="history" class="view" role="tabpanel">
         <article class="card">
           <div class="section-title row">
             <div>
@@ -259,7 +274,7 @@
             <button id="exportHistory" type="button" class="ghost">Export JSON</button>
           </div>
           <div class="filters">
-            <input id="historySearch" type="search" placeholder="Search posts..." />
+            <input id="historySearch" type="search" placeholder="Search posts…" />
             <select id="historyStatus">
               <option value="">All statuses</option>
               <option>Draft</option>
@@ -272,23 +287,25 @@
         </article>
       </section>
 
-      <section id="analytics" class="view">
+      <!-- ANALYTICS TAB -->
+      <section id="analytics" class="view" role="tabpanel">
         <article class="card">
           <div class="section-title">
             <h2>Analytics dashboard</h2>
             <p>Prototype metrics are generated locally to model the future Meta Insights experience.</p>
           </div>
           <div id="analyticsSummary" class="stat-grid"></div>
-          <h3 class="subhead">Top posts</h3>
-          <div id="topPosts" class="history-list compact"></div>
+          <h3 class="subhead">Top posts by engagement</h3>
+          <div id="topPosts" class="history-list"></div>
         </article>
       </section>
 
-      <section id="settings" class="view">
+      <!-- SETTINGS TAB -->
+      <section id="settings" class="view" role="tabpanel">
         <article class="card">
           <div class="section-title">
-            <h2>Settings & integration placeholders</h2>
-            <p>Use this screen to test the future setup flow before real backend/API work.</p>
+            <h2>Settings &amp; integration placeholders</h2>
+            <p>Use this screen to test the future setup flow before real backend / API work.</p>
           </div>
 
           <div class="connect-box">
