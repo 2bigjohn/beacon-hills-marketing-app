@@ -62,10 +62,41 @@ behind-the-scenes kitchen craft, Chef John's story and technique.`;
 
 function getSeason(m){return m>=2&&m<=4?"Spring":m>=5&&m<=7?"Summer":m>=8&&m<=10?"Fall":"Winter";}
 
-// ─── Anthropic API helper ─────────────────────────────────────────────────────
-function anthropicHeaders(apiKey){
-  if(!apiKey)throw new Error("Add your Anthropic API key in ⚙️ Settings to use AI features.");
-  return{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+// ─── API helpers ──────────────────────────────────────────────────────────────
+const USE_PROXY = import.meta.env.VITE_USE_PROXY === "true";
+
+async function callAnthropic(body, apiKey) {
+  if (USE_PROXY) {
+    const res = await fetch("/api/anthropic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+  if (!apiKey) throw new Error("Add your Anthropic API key in ⚙️ Settings to use AI features.");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+async function callMeta(operation, params) {
+  const res = await fetch("/api/meta", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ operation, ...params }),
+  });
+  const d = await res.json();
+  if (d.error) throw new Error(typeof d.error === "string" ? d.error : (d.error.message || JSON.stringify(d.error)));
+  return d;
 }
 
 // ─── Password input ───────────────────────────────────────────────────────────
@@ -94,14 +125,12 @@ async function generateCampaignIdeas(apiKey){
   const now=new Date();
   const dateStr=now.toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
   const season=getSeason(now.getMonth());
-  const res=await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",headers:anthropicHeaders(apiKey),
-    body:JSON.stringify({
-      model:"claude-opus-4-8",
-      max_tokens:2000,
-      tools:[{"type":"web_search_20260209","name":"web_search"}],
-      system:BH_PROFILE,
-      messages:[{role:"user",content:`Today is ${dateStr}. Current season: ${season}.
+  const d=await callAnthropic({
+    model:"claude-opus-4-8",
+    max_tokens:2000,
+    tools:[{"type":"web_search_20260209","name":"web_search"}],
+    system:BH_PROFILE,
+    messages:[{role:"user",content:`Today is ${dateStr}. Current season: ${season}.
 
 Please search the web for:
 1. Current restaurant and fine dining social media trends right now
@@ -129,9 +158,7 @@ Respond ONLY with a valid JSON array of 5 objects. No markdown, no preamble:
   "dishes":["dish names that star in this campaign"],
   "trendSource":"what trend or event is driving this"
 }]`}]
-    })
-  });
-  const d=await res.json();
+  }, apiKey);
   const text=d.content?.filter(b=>b.type==="text").map(b=>b.text).join("")||"[]";
   const clean=text.replace(/```json|```/g,"").trim();
   const start=clean.indexOf("["),end=clean.lastIndexOf("]");
@@ -147,20 +174,18 @@ function makeThumbnail(dataUrl,size=120){
 
 // ─── AI: Organic content ──────────────────────────────────────────────────────
 async function generateContent({imageBase64,mimeType,tone,goal,notes,platforms,apiKey}){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:anthropicHeaders(apiKey),
-    body:JSON.stringify({model:"claude-opus-4-8",max_tokens:1000,messages:[{role:"user",content:[
-      {type:"image",source:{type:"base64",media_type:mimeType,data:imageBase64}},
-      {type:"text",text:`${BRAND}\n\nGenerate social media content for: ${platforms.map(p=>p.label).join(", ")}.\nTone: ${tone}. Goal: ${goal}.${notes?`\nChef notes: ${notes}`:""}\n\nFor EACH platform return JSON: { platform, caption, hashtags (array), postingTime, photoTip }.\nRespond ONLY with a valid JSON array, no markdown.`}
-    ]}]})});
-  const d=await res.json();const raw=d.content?.map(b=>b.text||"").join("")||"[]";
+  const d=await callAnthropic({model:"claude-opus-4-8",max_tokens:1000,messages:[{role:"user",content:[
+    {type:"image",source:{type:"base64",media_type:mimeType,data:imageBase64}},
+    {type:"text",text:`${BRAND}\n\nGenerate social media content for: ${platforms.map(p=>p.label).join(", ")}.\nTone: ${tone}. Goal: ${goal}.${notes?`\nChef notes: ${notes}`:""}\n\nFor EACH platform return JSON: { platform, caption, hashtags (array), postingTime, photoTip }.\nRespond ONLY with a valid JSON array, no markdown.`}
+  ]}]}, apiKey);
+  const raw=d.content?.map(b=>b.text||"").join("")||"[]";
   return JSON.parse(raw.replace(/```json|```/g,"").trim());
 }
 async function refineCaption({caption,hashtags,platform,feedback,apiKey}){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:anthropicHeaders(apiKey),
-    body:JSON.stringify({model:"claude-opus-4-8",max_tokens:600,messages:[{role:"user",content:
-      `${BRAND}\n\nCurrent ${platform} caption:\n"${caption}"\n\nCurrent hashtags: ${hashtags?.join(" ")||""}\n\nChef's refinement request: "${feedback}"\n\nRewrite the caption based on the feedback. Keep brand voice.\n\nRespond ONLY with valid JSON: { "caption": "...", "hashtags": ["..."] }\nNo markdown.`
-    }]})});
-  const d=await res.json();const raw=d.content?.map(b=>b.text||"").join("")||"{}";
+  const d=await callAnthropic({model:"claude-opus-4-8",max_tokens:600,messages:[{role:"user",content:
+    `${BRAND}\n\nCurrent ${platform} caption:\n"${caption}"\n\nCurrent hashtags: ${hashtags?.join(" ")||""}\n\nChef's refinement request: "${feedback}"\n\nRewrite the caption based on the feedback. Keep brand voice.\n\nRespond ONLY with valid JSON: { "caption": "...", "hashtags": ["..."] }\nNo markdown.`
+  }]}, apiKey);
+  const raw=d.content?.map(b=>b.text||"").join("")||"{}";
   return JSON.parse(raw.replace(/```json|```/g,"").trim());
 }
 
@@ -181,12 +206,11 @@ Return ONLY this exact JSON (no markdown):
   "audienceInsight": "1 sentence: who specifically this ad targets and why they respond",
   "adAngle": "1 sentence: the emotional or desire angle this ad leverages"
 }`;
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:anthropicHeaders(apiKey),
-    body:JSON.stringify({model:"claude-opus-4-8",max_tokens:400,messages:[{role:"user",content:[
-      {type:"image",source:{type:"base64",media_type:mimeType,data:imageBase64}},
-      {type:"text",text:prompt}
-    ]}]})});
-  const d=await res.json();const raw=d.content?.map(b=>b.text||"").join("")||"{}";
+  const d=await callAnthropic({model:"claude-opus-4-8",max_tokens:400,messages:[{role:"user",content:[
+    {type:"image",source:{type:"base64",media_type:mimeType,data:imageBase64}},
+    {type:"text",text:prompt}
+  ]}]}, apiKey);
+  const raw=d.content?.map(b=>b.text||"").join("")||"{}";
   return JSON.parse(raw.replace(/```json|```/g,"").trim());
 }
 
@@ -233,18 +257,18 @@ Return ONLY this exact JSON (no markdown):
     "campaignNote":"1 sentence on why paid ads work for this specific event"
   }
 }`;
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:anthropicHeaders(apiKey),
-    body:JSON.stringify({model:"claude-opus-4-8",max_tokens:1500,messages:[{role:"user",content:[
-      {type:"image",source:{type:"base64",media_type:mimeType,data:imageBase64}},
-      {type:"text",text:prompt}
-    ]}]})});
-  const d=await res.json();const raw=d.content?.map(b=>b.text||"").join("")||"{}";
+  const d=await callAnthropic({model:"claude-opus-4-8",max_tokens:1500,messages:[{role:"user",content:[
+    {type:"image",source:{type:"base64",media_type:mimeType,data:imageBase64}},
+    {type:"text",text:prompt}
+  ]}]}, apiKey);
+  const raw=d.content?.map(b=>b.text||"").join("")||"{}";
   return JSON.parse(raw.replace(/```json|```/g,"").trim());
 }
 
 
 // ─── Meta Marketing API: Create campaign ─────────────────────────────────────
 async function createAdCampaign({adAccountId,pageId,pageToken,headline,primaryText,ctaType,base64,mime,dailyBudget,objective}){
+  if(USE_PROXY)return callMeta("create_campaign",{adAccountId,pageId,headline,primaryText,ctaType,base64,mime,dailyBudget,objective});
   // 1 — Upload image
   const blob=await fetch(`data:${mime};base64,${base64}`).then(r=>r.blob());
   const imgForm=new FormData();imgForm.append("access_token",pageToken);imgForm.append("filename",blob,"ad.jpg");
@@ -280,6 +304,7 @@ async function imgbbUpload(base64,imgbbKey){
   const d=await res.json();if(!d.success)throw new Error(d.error?.message||"imgBB upload failed");return d.data.url;
 }
 async function scheduleFacebook({pageId,pageToken,caption,hashtags,base64,mime,scheduledTime}){
+  if(USE_PROXY)return callMeta("schedule_facebook",{pageId,caption,hashtags,base64,mime,scheduledTime});
   const message=`${caption}\n\n${hashtags.join(" ")}`.trim();
   const blob=await fetch(`data:${mime};base64,${base64}`).then(r=>r.blob());
   const form=new FormData();form.append("access_token",pageToken);form.append("published","false");form.append("message",message);form.append("scheduled_publish_time",String(scheduledTime));form.append("source",blob,"photo.jpg");
@@ -287,6 +312,7 @@ async function scheduleFacebook({pageId,pageToken,caption,hashtags,base64,mime,s
   if(d.error)throw new Error(d.error.message);return d;
 }
 async function scheduleInstagram({igUserId,pageToken,imgbbKey,caption,hashtags,base64,scheduledTime}){
+  if(USE_PROXY)return callMeta("schedule_instagram",{igUserId,caption,hashtags,base64,scheduledTime});
   const fullCaption=`${caption}\n\n${hashtags.join(" ")}`.trim();
   const imageUrl=await imgbbUpload(base64,imgbbKey);
   const containerRes=await fetch(`${GRAPH}/${igUserId}/media`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image_url:imageUrl,caption:fullCaption,published:false,scheduled_publish_time:scheduledTime,access_token:pageToken})});
@@ -906,13 +932,28 @@ function SettingsTab({settings,onSave}){
   const [showGuide,setShowGuide]=useState(false);
 
   const handleSave=async()=>{
-    const s={anthropicApiKey:anthropicApiKey.trim(),pageId:pageId.trim(),pageToken:pageToken.trim(),igUserId:igUserId.trim(),imgbbKey:imgbbKey.trim(),adAccountId:adAccountId.trim()};
+    const s={
+      pageId:pageId.trim(),igUserId:igUserId.trim(),adAccountId:adAccountId.trim(),
+      // In proxy mode preserve any locally cached secrets; in direct mode save them
+      anthropicApiKey:USE_PROXY?(settings.anthropicApiKey||""):anthropicApiKey.trim(),
+      pageToken:USE_PROXY?(settings.pageToken||""):pageToken.trim(),
+      imgbbKey:USE_PROXY?(settings.imgbbKey||""):imgbbKey.trim(),
+    };
     await saveSettings(s);onSave(s);setSaved(true);setTimeout(()=>setSaved(false),2000);};
   const handleTest=async()=>{
-    if(!pageToken.trim()||!pageId.trim()){setTestMsg({ok:false,text:"Enter Page ID and Token first."});return;}
+    if(!pageId.trim()){setTestMsg({ok:false,text:"Enter Page ID first."});return;}
     setTesting(true);setTestMsg(null);
-    try{const res=await fetch(`${GRAPH}/${pageId.trim()}?fields=name,fan_count&access_token=${pageToken.trim()}`);const d=await res.json();if(d.error)throw new Error(d.error.message);setTestMsg({ok:true,text:`✓ Connected to "${d.name}" (${(d.fan_count||0).toLocaleString()} followers)`});}
-    catch(err){setTestMsg({ok:false,text:`✗ ${err.message}`});}setTesting(false);};
+    try{
+      if(USE_PROXY){
+        const res=await fetch("/api/meta",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operation:"test_connection",pageId:pageId.trim()})});
+        const d=await res.json();if(d.error)throw new Error(typeof d.error==="string"?d.error:(d.error.message||"Connection failed"));
+        setTestMsg({ok:true,text:`✓ Connected to "${d.name}" (${(d.fan_count||0).toLocaleString()} followers)`});
+      }else{
+        if(!pageToken.trim()){setTestMsg({ok:false,text:"Enter Page Token first."});setTesting(false);return;}
+        const res=await fetch(`${GRAPH}/${pageId.trim()}?fields=name,fan_count&access_token=${pageToken.trim()}`);const d=await res.json();
+        if(d.error)throw new Error(d.error.message);setTestMsg({ok:true,text:`✓ Connected to "${d.name}" (${(d.fan_count||0).toLocaleString()} followers)`});
+      }
+    }catch(err){setTestMsg({ok:false,text:`✗ ${err.message}`});}setTesting(false);};
 
   const secretInputStyle={width:"100%",background:"#1c1c1c",border:"1px solid #333",borderRadius:10,color:"#f0ead6",padding:"10px 14px",fontSize:14,fontFamily:"Georgia,serif",boxSizing:"border-box"};
   const Field=({label,value,onChange,placeholder,hint,secret})=>(
@@ -925,16 +966,29 @@ function SettingsTab({settings,onSave}){
 
   return(<div style={{flex:1,overflowY:"auto",paddingBottom:100}}>
     <div style={{padding:"16px 16px 0"}}>
-      <div style={{background:"#1a1f1a",border:"1px solid #2a3a2a",borderRadius:14,padding:14,marginBottom:4}}>
-        <div style={{fontSize:13,color:"#a8d5aa",lineHeight:1.6}}>Enter your <strong>Anthropic API key</strong> to enable AI. Add Meta credentials to enable <strong>📅 Schedule</strong> and <strong>📣 Ad Campaigns</strong>.</div>
-      </div>
+      {USE_PROXY?(
+        <div style={{background:"#0a150a",border:"1px solid #2a4a2a",borderRadius:14,padding:14,marginBottom:4}}>
+          <div style={{fontSize:13,color:"#a8d5aa",lineHeight:1.6}}>🔒 <strong>Secure mode:</strong> Anthropic API key, Meta page token, and imgBB key are configured server-side as environment variables. Only your Page ID, Instagram User ID, and Ad Account ID are needed here.</div>
+        </div>
+      ):(
+        <div style={{background:"#1a1f1a",border:"1px solid #2a3a2a",borderRadius:14,padding:14,marginBottom:4}}>
+          <div style={{fontSize:13,color:"#a8d5aa",lineHeight:1.6}}>Enter your <strong>Anthropic API key</strong> to enable AI. Add Meta credentials to enable <strong>📅 Schedule</strong> and <strong>📣 Ad Campaigns</strong>.</div>
+        </div>
+      )}
     </div>
-    <Field label="Anthropic API Key" value={anthropicApiKey} onChange={setAnthropicApiKey} placeholder="sk-ant-api03-…" hint="Required — powers all AI caption, idea, and flyer features. Get yours at console.anthropic.com." secret/>
+    {!USE_PROXY&&<Field label="Anthropic API Key" value={anthropicApiKey} onChange={setAnthropicApiKey} placeholder="sk-ant-api03-…" hint="Required — powers all AI caption, idea, and flyer features. Get yours at console.anthropic.com." secret/>}
     <button style={{...S.actionBtn,margin:"12px 16px 0",display:"block",width:"calc(100% - 32px)",textAlign:"center",padding:12,fontSize:13}} onClick={()=>setShowGuide(g=>!g)}>{showGuide?"▲ Hide Meta setup guide":"📖 How to get your Meta credentials"}</button>
     {showGuide&&(
       <div style={{margin:"10px 16px 0",background:"#111",borderRadius:14,padding:16,border:"1px solid #2a2a2a",fontSize:12,color:"#888",lineHeight:1.8}}>
         <div style={{color:GOLD,fontWeight:700,marginBottom:8,fontSize:13}}>One-time setup (~25 min)</div>
-        {[
+        {USE_PROXY?[
+          ["1. ANTHROPIC_API_KEY (server)","In your Vercel project → Settings → Environment Variables → add ANTHROPIC_API_KEY. Get a key at console.anthropic.com."],
+          ["2. META_PAGE_TOKEN (server)","developers.facebook.com → Graph API Explorer → generate long-lived token with pages_manage_posts + ads_management + instagram_content_publish. Add as META_PAGE_TOKEN in Vercel."],
+          ["3. IMGBB_KEY (server)","imgbb.com → free account → API → generate key. Add as IMGBB_KEY in Vercel."],
+          ["4. Facebook Page ID (below)","Graph API Explorer → GET /me?fields=id,name. Or find it under Page Settings → Page Transparency."],
+          ["5. Instagram Business User ID (below)","Graph API Explorer → GET /me/accounts → GET /{page-id}/instagram_accounts → grab the id."],
+          ["6. Ad Account ID (below)","Meta Ads Manager → top left dropdown → copy the ID (looks like act_123456789)."],
+        ].map(([title,body])=><div key={title} style={{marginBottom:12}}><div style={{color:"#c8c0ae",fontWeight:600,marginBottom:4}}>{title}</div><div>{body}</div></div>):[
           ["1. Facebook Page Token","developers.facebook.com → Create App → Pages product → Graph API Explorer → generate token with pages_manage_posts + ads_management + instagram_content_publish → extend to long-lived (60 days)."],
           ["2. Facebook Page ID","Graph API Explorer → GET /me?fields=id,name → copy the id. Or find it under Page Settings → Page Transparency."],
           ["3. Instagram Business User ID","Graph API Explorer → GET /me/accounts → find your page → GET /{page-id}/instagram_accounts → grab the id."],
@@ -944,16 +998,16 @@ function SettingsTab({settings,onSave}){
       </div>
     )}
     <Field label="Facebook Page ID" value={pageId} onChange={setPageId} placeholder="123456789012345" hint="Your Beacon Hills Facebook Page ID"/>
-    <Field label="Page Access Token" value={pageToken} onChange={setPageToken} placeholder="EAABsbCS..." hint="Long-lived token with pages_manage_posts + ads_management + instagram_content_publish" secret/>
+    {!USE_PROXY&&<Field label="Page Access Token" value={pageToken} onChange={setPageToken} placeholder="EAABsbCS..." hint="Long-lived token with pages_manage_posts + ads_management + instagram_content_publish" secret/>}
     <Field label="Instagram Business User ID" value={igUserId} onChange={setIgUserId} placeholder="17841400000000" hint="Instagram Business account ID (not username)"/>
-    <Field label="imgBB API Key" value={imgbbKey} onChange={setImgbbKey} placeholder="Your imgBB key" hint="Free at imgbb.com — used to host images for Instagram API" secret/>
+    {!USE_PROXY&&<Field label="imgBB API Key" value={imgbbKey} onChange={setImgbbKey} placeholder="Your imgBB key" hint="Free at imgbb.com — used to host images for Instagram API" secret/>}
     <Field label="Ad Account ID" value={adAccountId} onChange={setAdAccountId} placeholder="act_123456789" hint="Meta Ads Manager → your ad account ID. Required for one-tap ad campaigns."/>
     {testMsg&&<div style={{margin:"12px 16px 0",padding:12,background:testMsg.ok?"#0f1a0f":"#2a0f0f",borderRadius:10,border:`1px solid ${testMsg.ok?"#2e5e2e":"#5a1f1f"}`,fontSize:13,color:testMsg.ok?"#a8f0a8":"#ff8a8a"}}>{testMsg.text}</div>}
     <div style={{display:"flex",gap:8,padding:"16px 16px 0"}}>
-      <button style={{...S.copyBtn,background:saved?"#22c55e":GOLD,flex:1,transition:"background 0.2s"}} onClick={handleSave}>{saved?"✓ Saved!":"Save Credentials"}</button>
+      <button style={{...S.copyBtn,background:saved?"#22c55e":GOLD,flex:1,transition:"background 0.2s"}} onClick={handleSave}>{saved?"✓ Saved!":"Save Settings"}</button>
       <button style={{...S.copyBtn,background:"#1a1f2e",color:"#7eb8f7",border:"1px solid #2a3a5a",flex:1,opacity:testing?0.5:1}} onClick={handleTest} disabled={testing}>{testing?"Testing…":"Test Connection"}</button>
     </div>
-    <div style={{margin:"12px 16px 0",padding:12,background:"#1a1010",borderRadius:10,border:"1px solid #3a1a1a",fontSize:11,color:"#666",lineHeight:1.5}}>🔒 Stored only on this device. Never sent anywhere except Meta's own API.</div>
+    <div style={{margin:"12px 16px 0",padding:12,background:"#1a1010",borderRadius:10,border:"1px solid #3a1a1a",fontSize:11,color:"#666",lineHeight:1.5}}>{USE_PROXY?"🔒 API keys are stored as server-side environment variables. Only non-secret IDs are saved on this device.":"🔒 Stored only on this device. Never sent anywhere except Meta's own API."}</div>
   </div>);
 }
 
@@ -1079,7 +1133,7 @@ export default function BeaconHillsSocialAgent(){
         <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={e=>handleFiles(e.target.files)}/>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>handleFiles(e.target.files)}/>
         <input ref={flyerRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleFlyerFile(e.target.files[0])}/>
-        {!settings.anthropicApiKey&&<div style={{...S.tipBox,background:"#1a100a",borderColor:"#3a2010",color:"#f0a84c"}}>🔑 <strong>Add your Anthropic API key</strong> in ⚙️ Settings to enable AI features.</div>}
+        {!USE_PROXY&&!settings.anthropicApiKey&&<div style={{...S.tipBox,background:"#1a100a",borderColor:"#3a2010",color:"#f0a84c"}}>🔑 <strong>Add your Anthropic API key</strong> in ⚙️ Settings to enable AI features.</div>}
         {!settings.pageToken&&<div style={S.tipBox}>⚙️ <strong>Connect Meta</strong> to enable scheduling + ad campaigns — tap Settings.</div>}
         <div style={S.tipBox}>📱 <strong>Install:</strong> Chrome menu → "Add to Home Screen"</div>
       </div>

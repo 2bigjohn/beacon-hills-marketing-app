@@ -4,59 +4,52 @@ _Last updated: 2026-06-24_
 
 ## Where things stand
 
-The repo currently contains **two separate apps** plus supporting assets:
-
-| File(s) | What it is | Runs today? | Uses real APIs? |
-|---|---|---|---|
-| `index.html`, `app.js`, `styles.css`, `service-worker.js`, `manifest.webmanifest` | Vanilla-JS PWA prototype | ✅ Yes | ❌ No — all output is templated mock text |
-| `BeaconHillsSocialAgent.jsx` | React app with live Anthropic + Meta integration | ❌ No — orphan file, no build setup | ✅ Yes |
-
-There is **no `package.json`** and no bundler, so the React app — the one with real
-functionality — cannot run in a browser. This is the root issue the roadmap addresses.
-
-**Guiding decision:** consolidate on the React app and retire the vanilla mock. The mock
-served its purpose as a clickable prototype; keeping both in sync is wasted effort.
+| Phase | Status |
+|---|---|
+| Phase 0 — Make the React app runnable | ✅ **Done** |
+| Phase 1 — Security: secrets server-side | ✅ **Done** |
+| Phase 2 — Reliability & AI hardening | Pending |
+| Phase 3 — Product gaps | Pending |
+| Phase 4 — Polish | Pending |
 
 ---
 
-## Phase 0 — Make the React app runnable _(blocker for everything)_
+## Phase 0 — Make the React app runnable ✅ Done
 
-**Goal:** `npm run dev` opens a working app; the project can be deployed to a live URL.
-
-- Add `package.json` with `react`, `react-dom`, `recharts`, `vite`, `@vitejs/plugin-react`.
-- Add `vite.config.js`, a real `index.html` entry point, and `src/main.jsx` that mounts
-  `BeaconHillsSocialAgent`.
-- Move `BeaconHillsSocialAgent.jsx` into `src/`.
-- Port the PWA pieces that are worth keeping (manifest, service worker, icons) into the
-  Vite build via `vite-plugin-pwa`.
-- Decide the fate of `app.js` / `index.html` (the mock): delete, or archive under `legacy/`.
-
-**Effort:** ~half a day. **Unblocks:** a real live link, plus every phase below.
+Added `package.json`, `vite.config.js`, `index.html`, `src/main.jsx`. Moved
+`BeaconHillsSocialAgent.jsx` to `src/`. Wired up `vite-plugin-pwa`. Added GitHub Actions
+workflow for GitHub Pages deploy. Archived the vanilla-JS mock to `legacy/`.
 
 ---
 
-## Phase 1 — Security: get secrets out of the browser _(highest-risk issue)_
+## Phase 1 — Security: get secrets out of the browser ✅ Done
 
-**Problem.** The app stores the **Anthropic API key** and **Meta page tokens** in
-`localStorage` and calls Anthropic directly from the browser using the
-`anthropic-dangerous-direct-browser-access` header. Consequences:
+**Problem (was).** The app stored the Anthropic API key and Meta page token in
+`localStorage` and called Anthropic directly from the browser using the
+`anthropic-dangerous-direct-browser-access` header.
 
-- The API key is readable by anyone with the device, and by any XSS vulnerability.
-- The Meta token carries `ads_management` scope — a leaked token can spend ad money.
-- "Dangerous direct browser access" is a development convenience, not a production pattern.
+**What was built:**
 
-**Fix.** Introduce a thin server-side proxy (serverless functions on Vercel / Netlify /
-Cloudflare):
+- `api/anthropic.js` — Vercel serverless function that holds `ANTHROPIC_API_KEY` as a
+  server env var and proxies all Anthropic API calls. The browser never sees the key.
+- `api/meta.js` — Vercel serverless function that holds `META_PAGE_TOKEN` and `IMGBB_KEY`
+  as server env vars and handles all Meta Graph API operations: Facebook scheduling,
+  Instagram scheduling, ad campaign creation, and connection testing.
+- `vercel.json` — Vercel deployment config. Sets `VITE_USE_PROXY=true` and `BASE_PATH=/`
+  at build time, enabling the proxy path and correct SPA routing.
+- Client toggle: `VITE_USE_PROXY` build flag. When `true` (Vercel), all AI and Meta calls
+  route through `/api/*` and the Settings tab hides secret fields. When `false` (GitHub
+  Pages / local dev), the app falls back to direct API calls with keys stored locally.
 
-- `POST /api/anthropic` — holds `ANTHROPIC_API_KEY` as a server env var, forwards the
-  request to `api.anthropic.com`. The browser never sees the key.
-- `POST /api/meta/*` — same pattern for Graph API calls; Meta tokens stored server-side
-  (or in an encrypted session), never in `localStorage`.
-- Remove the API-key and token fields from the client Settings tab (or keep only a
-  "signed in / not signed in" indicator).
-
-**Effort:** ~1 day. **Depends on:** Phase 0. **Note:** also the moment to add a basic
-auth gate so not just anyone can hit your proxy and spend your credits.
+**To deploy to Vercel:**
+1. Connect the repo in vercel.com → import project.
+2. Add three environment variables in Project → Settings → Environment Variables:
+   - `ANTHROPIC_API_KEY` — your Anthropic key
+   - `META_PAGE_TOKEN` — long-lived Meta page token with `pages_manage_posts`,
+     `ads_management`, `instagram_content_publish`
+   - `IMGBB_KEY` — free key from imgbb.com
+3. Deploy. The Settings tab will show "Secure mode" and only ask for Page ID,
+   Instagram User ID, and Ad Account ID.
 
 ---
 
