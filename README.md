@@ -1,60 +1,80 @@
-# Beacon Hills Marketing Studio — Browser/PWA MVP
+# Beacon Hills Marketing Studio
 
-This is a static browser prototype for testing on Google Chrome on a Samsung/Android phone.
+A social media marketing assistant for Beacon Hills restaurant (Aksarben Village, Omaha).
+It turns a food photo or an event flyer into AI-written, brand-voiced captions, hashtags,
+posting schedules, and Meta ad campaigns — with manual approval gates before anything is
+scheduled or published.
 
-## What works now
+The app is a React + Vite single-page app and installable PWA. It calls the **Anthropic API**
+for AI content and the **Meta Graph / Marketing API** for scheduling and ads.
 
-- Create a Beacon Hills marketing post from a phone photo or gallery image
-- Select tone and campaign goal
-- Generate a branded caption, hashtags, organic schedule, audience, and ad recommendation
-- Upload an event flyer image and generate an event campaign plan
-- Manual approval gates before mock schedule/publish
-- Local post history
-- Mock analytics dashboard
-- Mock Meta connection setting
-- PWA manifest and service worker for install/offline behavior after HTTPS deployment
-
-## What is mocked
-
-- Meta Business Suite / Graph API connection
-- AI captioning/OCR
-- Actual scheduling/publishing
-- Actual ad creation/spend
-- Actual analytics
-
-## Easiest phone test
-
-1. Unzip this folder.
-2. Deploy the folder to a static host such as Netlify, Vercel, Cloudflare Pages, GitHub Pages, or your own HTTPS hosting.
-3. Open the deployed URL in Google Chrome on your Samsung phone.
-4. Use the Create and Event Flyer tabs.
-5. Chrome may offer "Install app" or "Add to Home screen" once the site is served over HTTPS.
-
-## Local desktop test
-
-From inside this folder:
+## Quick start
 
 ```bash
-python3 -m http.server 8080
+npm install
+npm run dev      # http://localhost:5173/beacon-hills-marketing-app/
 ```
 
-Then open:
-
-```text
-http://localhost:8080
+```bash
+npm run build    # production build to dist/
+npm run preview  # preview the production build locally
 ```
 
-Camera/PWA install features work best on HTTPS, so use a real static deployment for phone testing.
+### Configuration
 
-## Next engineering phase
+Open the **⚙️ Settings** tab in the running app and add:
 
-Replace mocked services with a backend:
+- **Anthropic API key** — required; powers all AI features (captions, ideas, flyer analysis,
+  ad creative). Get one at [console.anthropic.com](https://console.anthropic.com).
+- **Meta credentials** (optional) — Page ID, Page access token, Instagram Business user ID,
+  imgBB key, and Ad Account ID to enable scheduling and one-tap ad campaigns. The Settings
+  tab includes a step-by-step guide.
 
-- Authentication and user roles
-- Meta OAuth
-- Secure token storage
-- Meta Page/Instagram publishing
-- Meta Marketing API campaign drafts
-- Real image/flyer OCR
-- Real analytics ingestion
-- Production database
+Credentials are stored in `localStorage` on the device.
+
+> ⚠️ **Security note:** the app currently calls the Anthropic API directly from the browser
+> and stores keys in `localStorage`. This is fine for personal/single-device use but **not**
+> safe for a public multi-user deployment. Moving secrets behind a server-side proxy is
+> Phase 1 of [`ROADMAP.md`](./ROADMAP.md).
+
+## Deployment
+
+A GitHub Actions workflow ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml))
+builds and deploys to **GitHub Pages** on every push to `main`. Enable it once under
+**Settings → Pages → Source: GitHub Actions**. The live URL will be:
+
+```
+https://2bigjohn.github.io/beacon-hills-marketing-app/
+```
+
+The Vite `base` path defaults to `/beacon-hills-marketing-app/` for GitHub Pages. For hosts
+that serve from the root (Vercel, Netlify, Cloudflare Pages), build with `BASE_PATH=/`:
+
+```bash
+BASE_PATH=/ npm run build
+```
+
+## Project structure
+
+```
+index.html                  Vite entry HTML
+vite.config.js              Vite + PWA config (manifest, base path)
+src/
+  main.jsx                  React mount point
+  BeaconHillsSocialAgent.jsx  The full app (UI, AI calls, Meta API integration)
+public/icons/               PWA icons
+legacy/                     The original vanilla-JS mock prototype (archived)
+ROADMAP.md                  Phased improvement plan
+```
+
+## Roadmap
+
+See [`ROADMAP.md`](./ROADMAP.md) for the phased plan: securing API keys behind a proxy,
+hardening the AI calls (structured outputs, streaming, retries, image downscaling), wiring
+real Meta Insights analytics, and accessibility polish.
+
+## Legacy prototype
+
+The original clickable mock (vanilla HTML/CSS/JS, all output templated) lives in `legacy/`
+for reference. It is no longer the active app and can be removed once the React app is
+fully validated in production.

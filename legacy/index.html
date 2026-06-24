@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#23362d" />
+  <meta name="description" content="Beacon Hills restaurant marketing assistant prototype for Meta-ready posts, events, approvals, and analytics." />
+  <title>Beacon Hills Marketing</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <noscript>This prototype needs JavaScript enabled.</noscript>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Beacon Hills · Aksarben Village</p>
+        <h1>Marketing Studio</h1>
+      </div>
+      <button id="installBtn" class="ghost hidden" type="button">Install</button>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Primary navigation">
+      <button class="tab active" role="tab" aria-selected="true" data-view="builder">Create</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="events">Event Flyer</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="history">History</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="analytics">Analytics</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="settings">Settings</button>
+    </nav>
+
+    <main>
+      <!-- CREATE TAB -->
+      <section id="builder" class="view active" role="tabpanel">
+        <article class="card">
+          <div class="section-title">
+            <h2>Create a Meta-ready post</h2>
+            <p>Upload a photo, choose a tone and goal, then approve before publishing.</p>
+          </div>
+
+          <label class="field">
+            <span>Post title / internal note</span>
+            <input id="postTitle" type="text" placeholder="Example: Friday seafood feature" />
+          </label>
+
+          <div class="media-grid">
+            <label class="upload-tile">
+              <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+              <span class="upload-icon">📷</span>
+              <strong>Take photo</strong>
+              <small>Uses your phone camera</small>
+            </label>
+            <label class="upload-tile">
+              <input id="galleryInput" type="file" accept="image/*" />
+              <span class="upload-icon">🖼️</span>
+              <strong>Choose photo</strong>
+              <small>Gallery or files</small>
+            </label>
+          </div>
+
+          <div id="mediaPreview" class="media-preview hidden">
+            <img id="previewImage" alt="Selected marketing media preview" />
+            <button id="clearMedia" type="button" class="ghost danger">Remove image</button>
+          </div>
+
+          <div class="two-col">
+            <label class="field">
+              <span>Tone</span>
+              <select id="tone">
+                <option>Warm &amp; Hospitable</option>
+                <option>Polished Bistro</option>
+                <option>Casual Local Favorite</option>
+                <option>Event Promo</option>
+                <option>Urgent / Limited-Time</option>
+                <option>Elegant Private Dining</option>
+                <option>Catering / Corporate</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Goal</span>
+              <select id="goal">
+                <option value="reservations">Drive reservations</option>
+                <option value="brunch">Promote brunch</option>
+                <option value="happy_hour">Promote happy hour</option>
+                <option value="dinner">Promote dinner</option>
+                <option value="event">Promote event attendance</option>
+                <option value="private_events">Promote private events / Elmwood Room</option>
+                <option value="catering">Promote catering</option>
+                <option value="online_orders">Drive online orders</option>
+                <option value="awareness">General brand awareness</option>
+              </select>
+            </label>
+          </div>
+
+          <fieldset class="platforms">
+            <legend>Platforms</legend>
+            <label><input type="checkbox" class="platform" value="Facebook" checked /> Facebook</label>
+            <label><input type="checkbox" class="platform" value="Instagram" checked /> Instagram</label>
+          </fieldset>
+
+          <label class="field">
+            <span>Optional details</span>
+            <textarea id="postDetails" rows="4" placeholder="Dish name, offer, date, link, audience, or special details…"></textarea>
+          </label>
+
+          <div class="action-row">
+            <button id="generatePost" type="button" class="primary">Generate post plan</button>
+            <button id="resetBuilder" type="button" class="ghost">Reset</button>
+          </div>
+        </article>
+
+        <article id="generatedCard" class="card generated hidden">
+          <div class="section-title">
+            <h2>Generated recommendation</h2>
+            <p>Review, edit, and approve before anything is scheduled or posted.</p>
+          </div>
+
+          <div class="field-with-copy">
+            <label class="field">
+              <span>Caption</span>
+              <textarea id="captionOutput" rows="7"></textarea>
+            </label>
+            <div class="field-footer">
+              <small id="captionCount" class="char-count">0 / 2,200 chars</small>
+              <button id="copyCaptionBtn" type="button" class="ghost copy-btn">Copy caption</button>
+            </div>
+          </div>
+
+          <div class="field-with-copy">
+            <label class="field">
+              <span>Hashtags</span>
+              <input id="hashtagsOutput" type="text" />
+            </label>
+            <div class="field-footer justify-end">
+              <button id="copyHashtagsBtn" type="button" class="ghost copy-btn">Copy hashtags</button>
+            </div>
+          </div>
+
+          <div class="recommendation-grid">
+            <div class="recommendation">
+              <h3>Organic schedule</h3>
+              <p id="scheduleOutput"></p>
+            </div>
+            <div class="recommendation">
+              <h3>Ad recommendation</h3>
+              <p id="adOutput"></p>
+            </div>
+            <div class="recommendation">
+              <h3>Target audience</h3>
+              <p id="audienceOutput"></p>
+            </div>
+          </div>
+
+          <label class="approval">
+            <input id="approvalCheck" type="checkbox" />
+            I approve this post / campaign plan.
+          </label>
+
+          <div class="action-row">
+            <button id="saveDraft" type="button" class="secondary">Save draft</button>
+            <button id="scheduleMock" type="button" class="primary">Approve &amp; schedule mock</button>
+            <button id="publishMock" type="button" class="primary">Approve &amp; publish mock</button>
+          </div>
+        </article>
+      </section>
+
+      <!-- EVENT FLYER TAB -->
+      <section id="events" class="view" role="tabpanel">
+        <article class="card">
+          <div class="section-title">
+            <h2>Event flyer assistant</h2>
+            <p>Upload a flyer, confirm the details, then generate posts, timing, and optional ads.</p>
+          </div>
+
+          <label class="upload-tile wide">
+            <input id="flyerInput" type="file" accept="image/*,.pdf" />
+            <span class="upload-icon">🎟️</span>
+            <strong>Upload event flyer</strong>
+            <small>Image preview works now. PDF parsing is a backend feature for the next phase.</small>
+          </label>
+
+          <div id="flyerPreview" class="media-preview hidden">
+            <img id="flyerImage" alt="Uploaded event flyer preview" />
+          </div>
+
+          <div class="two-col">
+            <label class="field">
+              <span>Event name <span class="required">*</span></span>
+              <input id="eventName" type="text" placeholder="Example: Wine Dinner" />
+            </label>
+            <label class="field">
+              <span>Event date / time</span>
+              <input id="eventDate" type="datetime-local" />
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Flyer text or notes</span>
+            <textarea id="flyerText" rows="5" placeholder="Paste key flyer text here: offer, price, musicians, reservation link, etc."></textarea>
+          </label>
+
+          <div class="two-col">
+            <label class="field">
+              <span>Primary event goal</span>
+              <select id="eventGoal">
+                <option value="event">Drive event attendance</option>
+                <option value="reservations">Drive reservations</option>
+                <option value="awareness">Awareness only</option>
+                <option value="private_events">Promote private events</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Urgency</span>
+              <select id="eventUrgency">
+                <option value="normal">Normal</option>
+                <option value="soon">Happening soon</option>
+                <option value="limited">Limited seats / limited time</option>
+              </select>
+            </label>
+          </div>
+
+          <button id="generateEvent" type="button" class="primary">Build event campaign</button>
+        </article>
+
+        <article id="eventPlanCard" class="card generated hidden">
+          <div class="section-title">
+            <h2>Event campaign plan</h2>
+            <p>Everything remains a draft until approved.</p>
+          </div>
+
+          <label class="field">
+            <span>Event caption</span>
+            <textarea id="eventCaption" rows="7"></textarea>
+          </label>
+
+          <div class="recommendation-grid">
+            <div class="recommendation">
+              <h3>Posting cadence</h3>
+              <p id="eventSchedule"></p>
+            </div>
+            <div class="recommendation">
+              <h3>Paid vs free</h3>
+              <p id="eventPaid"></p>
+            </div>
+            <div class="recommendation">
+              <h3>Suggested targeting</h3>
+              <p id="eventTargeting"></p>
+            </div>
+          </div>
+
+          <label class="approval">
+            <input id="eventApproval" type="checkbox" />
+            I approve this event campaign draft.
+          </label>
+
+          <div class="action-row">
+            <button id="saveEventDraft" type="button" class="secondary">Save event draft</button>
+            <button id="scheduleEventMock" type="button" class="primary">Approve &amp; schedule mock</button>
+            <button id="publishEventMock" type="button" class="primary">Approve &amp; publish mock</button>
+          </div>
+        </article>
+      </section>
+
+      <!-- HISTORY TAB -->
+      <section id="history" class="view" role="tabpanel">
+        <article class="card">
+          <div class="section-title row">
+            <div>
+              <h2>Post history</h2>
+              <p>Saved locally in this browser for prototype testing.</p>
+            </div>
+            <button id="exportHistory" type="button" class="ghost">Export JSON</button>
+          </div>
+          <div class="filters">
+            <input id="historySearch" type="search" placeholder="Search posts…" />
+            <select id="historyStatus">
+              <option value="">All statuses</option>
+              <option>Draft</option>
+              <option>Scheduled</option>
+              <option>Published</option>
+              <option>Promoted Recommendation</option>
+            </select>
+          </div>
+          <div id="historyList" class="history-list"></div>
+        </article>
+      </section>
+
+      <!-- ANALYTICS TAB -->
+      <section id="analytics" class="view" role="tabpanel">
+        <article class="card">
+          <div class="section-title">
+            <h2>Analytics dashboard</h2>
+            <p>Prototype metrics are generated locally to model the future Meta Insights experience.</p>
+          </div>
+          <div id="analyticsSummary" class="stat-grid"></div>
+          <h3 class="subhead">Top posts by engagement</h3>
+          <div id="topPosts" class="history-list"></div>
+        </article>
+      </section>
+
+      <!-- SETTINGS TAB -->
+      <section id="settings" class="view" role="tabpanel">
+        <article class="card">
+          <div class="section-title">
+            <h2>Settings &amp; integration placeholders</h2>
+            <p>Use this screen to test the future setup flow before real backend / API work.</p>
+          </div>
+
+          <div class="connect-box">
+            <div>
+              <h3>Meta connection</h3>
+              <p id="metaStatus">Not connected. Prototype mode only.</p>
+            </div>
+            <button id="toggleMeta" type="button" class="secondary">Mock connect</button>
+          </div>
+
+          <label class="field">
+            <span>Default reservation CTA</span>
+            <input id="reservationLink" type="url" value="https://beaconhills.com/" />
+          </label>
+
+          <label class="field">
+            <span>Brand voice notes</span>
+            <textarea id="brandNotes" rows="6">Warm, polished American bistro voice. Emphasize Aksarben Village, chef-driven food, steaks, chops, seafood, brunch, happy hour, catering, private events, Elmwood Room, hospitality, and reservations. Avoid sounding generic, gimmicky, or overly trendy.</textarea>
+          </label>
+
+          <label class="field">
+            <span>Preferred hashtags</span>
+            <input id="preferredHashtags" type="text" value="#BeaconHills #AksarbenVillage #OmahaEats #OmahaRestaurants #AmericanBistro" />
+          </label>
+
+          <div class="action-row">
+            <button id="saveSettings" type="button" class="primary">Save settings</button>
+            <button id="clearAllData" type="button" class="ghost danger">Clear prototype data</button>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
